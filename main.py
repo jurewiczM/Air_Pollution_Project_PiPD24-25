@@ -4,7 +4,7 @@ from CountriesDictionary import country_domain_codes as cdc
 
 # loading the air pollution elements ant their quantity based on latitude and longitude
 def load_pollution_gps_code(lat, lon):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    #key = 'api key'
     air_pollution_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&appid={key}'
     response = requests.get(air_pollution_api_url)
     response_body = response.text
@@ -40,7 +40,7 @@ def load_pollution_gps_code(lat, lon):
 
 # converting latitude and longitude to country and city name
 def convert_gps_to_city(lat, lon):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    # key = 'api key'
     geocoding_api_url = f'http://api.openweathermap.org/geo/1.0/reverse?lat={lat}&lon={lon}&limit={5}&appid={key}'
     response = requests.get(geocoding_api_url)
     response_body = response.text
