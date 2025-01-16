@@ -47,7 +47,7 @@ def load_historical_data_1WeekBefore(lat, lon, start, end):
 
 
 def load_historical_data_6hwindow(lat, lon, end):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API_KEY'
     historical_data = []
 
     day_end = end  # Start of the day
@@ -82,7 +82,7 @@ def load_historical_data_6hwindow(lat, lon, end):
 
 # loading the air pollution elements ant their quantity based on latitude and longitude
 def load_pollution_gps_code(lat, lon):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API_KEY'
     # key = 'api key'
     air_pollution_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&appid={key}'
     response = requests.get(air_pollution_api_url)
@@ -119,7 +119,7 @@ def load_pollution_gps_code(lat, lon):
 
 # converting latitude and longitude to country and city name
 def convert_gps_to_city(lat, lon):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API_KEY'
     # key = 'api key'
     geocoding_api_url = f'http://api.openweathermap.org/geo/1.0/reverse?lat={lat}&lon={lon}&limit={5}&appid={key}'
     response = requests.get(geocoding_api_url)
@@ -147,7 +147,7 @@ def convert_gps_to_city(lat, lon):
 
 # converting city names to their gps-cords
 def convert_city_to_gps(city_name):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API_KEY'
     direct_geocoding_api_url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit={1}&appid={key}"
 
     response = requests.get(direct_geocoding_api_url)
@@ -176,7 +176,7 @@ def convert_city_to_gps(city_name):
 
 # getting air quality index and the qir quality category
 def get_air_quality_index(lat, lon):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API_KEY'
     # key = 'api key'
     air_pollution_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&appid={key}'
     response = requests.get(air_pollution_api_url)
