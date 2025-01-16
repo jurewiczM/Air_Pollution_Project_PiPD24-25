@@ -31,7 +31,7 @@ def get_air_quality_data(api_key, location):
     return historical_data
 
 # API klucz
-api_key = '986b86d5d24bbace34084b1fcda169bd'
+api_key = 'API_KEY'
 location = {'lat': 40.7128, 'lon': -74.0060}
 
 components_list = get_air_quality_data(api_key, location)   
