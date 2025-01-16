@@ -12,7 +12,7 @@ import datetime as dt
     
 #metoda: dane historyczne z jednej daty 7 dni wstecz
 def load_historical_data_1WeekBefore(lat, lon, start, end):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API_KEY'
     historical_data = []
     # Generate timestamps for the 7 days between `start` and `end`
     for i in range(7):
