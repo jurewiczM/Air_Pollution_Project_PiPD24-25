@@ -8,7 +8,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from datetime import datetime, timezone
-
+from regression import get_air_quality_prediction
+from PIL import Image, ImageTk
 
 
 def load_historical_data_1WeekBefore(lat, lon, start):
@@ -173,7 +174,6 @@ def convert_city_to_gps(city_name):
     city_geocoding_table.append(geocoded_country)
     return city_geocoding_table
 
-# getting air quality index and the qir quality category
 def get_air_quality_index(lat, lon):
     key = '986b86d5d24bbace34084b1fcda169bd'
     # key = 'api key'
@@ -183,6 +183,12 @@ def get_air_quality_index(lat, lon):
     response_body_json = json.loads(response_body)
 
     air_quality_index = response_body_json["list"][0]["main"]["aqi"]
+
+    return air_quality_index
+
+# getting air quality index and the qir quality category
+def get_air_quality_index_category_name(lat, lon):
+    air_quality_index = get_air_quality_index(lat, lon)
 
     index_quantitive_name = {
         1: "Good",
@@ -571,6 +577,16 @@ def toggle_historical_mode():
         for widget in [entry_gps1_lat_t2, entry_gps1_long_t2]:
             widget.config(state='normal')
 
+def toggle_forecast_mode():
+    if forecast_chosen_mode.get() == 'city':
+        entry1_forecast.config(state='normal')
+        for widget in [entry_gps1_lat_forecast, entry_gps1_long_forecast]:
+            widget.config(state='disabled')
+    elif forecast_chosen_mode.get() == 'gps':
+        entry1_forecast.config(state='disabled')
+        for widget in [entry_gps1_lat_forecast, entry_gps1_long_forecast]:
+            widget.config(state='normal')
+
 # displaying the basic pollution data
 def display_data():
 
@@ -582,7 +598,7 @@ def display_data():
             city = convert_gps_to_city(lat, lon)[0]
             country = convert_gps_to_city(lat, lon)[1]
             pollutant_values = load_pollution_gps_code(lat, lon)
-            aqi = get_air_quality_index(lat, lon)
+            aqi = get_air_quality_index_category_name(lat, lon)
 
             aqi_value_label.config(text=f"Air Quality Index: {aqi}")
 
@@ -615,7 +631,7 @@ def display_data():
             lon = convert_city_to_gps(city)[1]
             country = convert_gps_to_city(lat, lon)[1]
             pollutant_values = load_pollution_gps_code(lat, lon)
-            aqi = get_air_quality_index(lat, lon)
+            aqi = get_air_quality_index_category_name(lat, lon)
 
             so2_category = get_air_pollutant_category(pollutant_values[0], [0, 20, 80, 250, 350, 400])
             no2_category = get_air_pollutant_category(pollutant_values[1], [0, 40, 70, 150, 200, 250])
@@ -882,8 +898,8 @@ def fetch_input_comparison():
                 country1 = convert_gps_to_city(lat_and_lon_c1[0], lat_and_lon_c1[1])[1]
                 country2 = convert_gps_to_city(lat_and_lon_c2[0], lat_and_lon_c2[1])[1]
 
-                aqi1 = get_air_quality_index(lat_and_lon_c1[0], lat_and_lon_c1[1])
-                aqi2 = get_air_quality_index(lat_and_lon_c2[0], lat_and_lon_c2[1])
+                aqi1 = get_air_quality_index_category_name(lat_and_lon_c1[0], lat_and_lon_c1[1])
+                aqi2 = get_air_quality_index_category_name(lat_and_lon_c2[0], lat_and_lon_c2[1])
 
                 so2_category1 = get_air_pollutant_category(pol_data_c1[0], [0, 20, 80, 250, 350, 400])
                 no2_category1= get_air_pollutant_category(pol_data_c1[1], [0, 40, 70, 150, 200, 250])
@@ -945,14 +961,14 @@ def fetch_input_comparison():
                 city1 = convert_gps_to_city(lat_c1, lon_c1)[0]
                 country1 = convert_gps_to_city(lat_c1, lon_c1)[1]
                 pollution_city1 = load_pollution_gps_code(lat_c1, lon_c1)
-                aqi_cty1 = get_air_quality_index(lat_c1, lon_c1)
+                aqi_cty1 = get_air_quality_index_category_name(lat_c1, lon_c1)
 
                 lat_c2 = float(entry_gps2_lat.get())
                 lon_c2 = float(entry_gps2_long.get())
                 city2 = convert_gps_to_city(lat_c2, lon_c2)[0]
                 country2 = convert_gps_to_city(lat_c2, lon_c2)[1]
                 pollution_city2 = load_pollution_gps_code(lat_c2, lon_c2)
-                aqi_cty2 = get_air_quality_index(lat_c2, lon_c2)
+                aqi_cty2 = get_air_quality_index_category_name(lat_c2, lon_c2)
 
                 so2_category1 = get_air_pollutant_category(pollution_city1[0], [0, 20, 80, 250, 350, 400])
                 no2_category1 = get_air_pollutant_category(pollution_city1[1], [0, 40, 70, 150, 200, 250])
@@ -1070,6 +1086,79 @@ def fetch_input_historical_data():
     except Exception as e:
         label_area_t2.config(text="Input data is invalid or no data found!")
 
+def fetch_input_regression_data():
+    try:
+        if forecast_chosen_mode.get() == 'city':
+            city = entry1_forecast.get()
+            lat = convert_city_to_gps(city)[0]
+            lon = convert_city_to_gps(city)[1]
+            country = convert_gps_to_city(lat, lon)[1]
+            aqi = get_air_quality_index(lat, lon)
+            location = {'lat': lat, 'lon': lon}
+            predicted_values = get_air_quality_prediction(location)
+            predicted_aqi = predicted_values['predicted_aqi']
+            r2_score = predicted_values['r2_score']
+            mean_squared_error = predicted_values['mean_squared_error']
+            mean_absolute_error = predicted_values['mean_absolute_error']
+
+            label_area_forecast.config(text = f"Loading regression model based on city name: {city}....\n"
+                                              
+                                              f"..........................................................................................................................................................\n"
+                                              
+                                              f"Data found!\n"
+                                              f"Country: {country}\n"
+                                              f"GPS: ({lat}, {lon})\n"
+                                              f"Current AQI level: {aqi}\n"
+                                              f"..........................................................................................................................................................\n"
+                                              f"Using Reression model to calculate predicet AQI Value......\n"
+                                              f"..........................................................................................................................................................\n"
+                                              f"Predicted AQI value: {predicted_aqi}\n"
+                                              f"..........................................................................................................................................................\n"
+                                              f"Model quality:\n"
+                                              f"..........................................................................................................................................................\n"
+                                              f"R2: {r2_score}\n"
+                                              f"Mean Squared Error: {mean_squared_error}\n"
+                                              f"Mean absolute Error: {mean_absolute_error}\n"
+                                              f"Calculation based on data from the last 7 days\n"
+                                              f"..........................................................................................................................................................\n"
+                                              f"AQ Categories: 1 - Good, 2 - Fair, 3 - Moderate, 4 - Poor, 5 - Very Poor")
+        elif forecast_chosen_mode.get() == 'gps':
+            lat = entry_gps1_lat_forecast.get()
+            lon = entry_gps1_long_forecast.get()
+            city = convert_gps_to_city(lat, lon)[0]
+            country = convert_gps_to_city(lat, lon)[1]
+            aqi = get_air_quality_index(lat, lon)
+            location = {'lat': lat, 'lon': lon}
+            predicted_values = get_air_quality_prediction(location)
+            predicted_aqi = predicted_values['predicted_aqi']
+            r2_score = predicted_values['r2_score']
+            mean_squared_error = predicted_values['mean_squared_error']
+            mean_absolute_error = predicted_values['mean_absolute_error']
+
+            label_area_forecast.config(text=f"Loading regression model based on city name: {city}....\n"
+
+                                            f"..........................................................................................................................................................\n"
+
+                                            f"Data found!\n"
+                                            f"Country: {country}\n"
+                                            f"GPS: ({lat}, {lon})\n"
+                                            f"Current AQI level: {aqi}\n"
+                                            f"..........................................................................................................................................................\n"
+                                            f"Using Reression model to calculate predicet AQI Value......\n"
+                                            f"..........................................................................................................................................................\n"
+                                            f"Predicted AQI value: {predicted_aqi}\n"
+                                            f"..........................................................................................................................................................\n"
+                                            f"Model quality:\n"
+                                            f"..........................................................................................................................................................\n"
+                                            f"R2: {r2_score}\n"
+                                            f"Mean Squared Error: {mean_squared_error}\n"
+                                            f"Mean absolute Error: {mean_absolute_error}\n"
+                                            f"Calculation based on data from the last 7 days\n"
+                                            f"..........................................................................................................................................................\n"
+                                            f"AQ Categories: 1 - Good, 2 - Fair, 3 - Moderate, 4 - Poor, 5 - Very Poor")
+    except Exception as e:
+        label_area_forecast.config(text="Input data is invalid or no data found!")
+
 
 def update_mode_label():
     if compare_mode.get() == 'city':
@@ -1082,6 +1171,12 @@ def update_historical_mode_label():
         mode_label_t2.set('Load historical data by City')
     elif historical_chosen_mode.get() == 'gps':
         mode_label_t2.set('Load historical data by GPS')
+
+def update_forecast_mode_label():
+    if forecast_chosen_mode.get() == 'city':
+        mode_label_forecast.set('Load regression data by City')
+    elif forecast_chosen_mode.get() == 'gps':
+        mode_label_forecast.set('Load regression data by GPS')
 
 
 
@@ -1300,19 +1395,102 @@ show_chart_button.grid_remove()  # Initially hidden
 
 toggle_compare_mode()
 
-# Zakładka 4 (prognoza)
 tab4 = ttk.Frame(tab_control)
 tab_control.add(tab4, text='Pollution forecast')
-label4 = ttk.Label(tab4, text='To jest zawartość zakładki 4', font=('Arial', 14))
-label4.pack(expand=1, fill='both')
+tab4.columnconfigure(0, weight=1)
+tab4.columnconfigure(1, weight=1)
+
+# Selection Mode with Radio Buttons
+forecast_chosen_mode = tk.StringVar(value='city')
+mode_label_forecast = tk.StringVar(value='Load regression data by City')
+
+radio_city_forecast = ttk.Radiobutton(tab4, text='Regression based on city-name search', variable=forecast_chosen_mode, value='city', command=lambda: [toggle_forecast_mode(), update_forecast_mode_label()])
+radio_city_forecast.grid(row=0, column=0, columnspan=2, pady=5)
+
+radio_gps_forecast = ttk.Radiobutton(tab4, text='Regression based on GPS search', variable=forecast_chosen_mode, value='gps', command=lambda: [toggle_forecast_mode(), update_forecast_mode_label()])
+radio_gps_forecast.grid(row=1, column=0, columnspan=2, pady=5)
+
+mode_display_label_forecast = ttk.Label(tab4, textvariable=mode_label_forecast, font=('Arial', 12, 'bold'))
+mode_display_label_forecast.grid(row=2, column=0, columnspan=2, pady=5)
+
+# --- Column 1: City 1 ---
+label1_forecast= tk.Label(tab4, text="Enter city name:")
+label1_forecast.grid(row=3, column=0, padx=10, pady=5, sticky="w")
+entry1_forecast = tk.Entry(tab4)
+entry1_forecast.grid(row=4, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+
+label_gps1_lat_forecast = tk.Label(tab4, text="Latitude:")
+label_gps1_lat_forecast.grid(row=5, column=0, padx=10, pady=2, sticky="w")
+entry_gps1_lat_forecast = tk.Entry(tab4)
+entry_gps1_lat_forecast.grid(row=6, column=0, columnspan=2, padx=10, pady=2, sticky="ew")
+
+label_gps1_long_forecast = tk.Label(tab4, text="Longitude:")
+label_gps1_long_forecast.grid(row=7, column=0, padx=10, pady=2, sticky="w")
+entry_gps1_long_forecast= tk.Entry(tab4)
+entry_gps1_long_forecast.grid(row=8, column=0, columnspan=2, padx=10, pady=2, sticky="ew")
+
+# --- Data Display Areas ---
+label_area_forecast= tk.Label(tab4, text="data....", height=20, width=70, relief="solid", anchor="nw", justify="left", background='white', font=('Arial', 11))
+label_area_forecast.grid(row=9, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
+
+fetch_regression_input_button = ttk.Button(tab4, text='Fetch Input', command = fetch_input_regression_data, width=30, padding = 15)
+fetch_regression_input_button.grid(row=10, column=0, columnspan=2, pady=10)
+
+
+toggle_forecast_mode()
 
 
 
 # Zakładka 5 (credits)
 tab5 = ttk.Frame(tab_control)
 tab_control.add(tab5, text='Project credits')
-label5 = ttk.Label(tab5, text='To jest zawartość zakładki 5', font=('Arial', 14))
-label5.pack(expand=1, fill='both')
+
+# Główna ramka na zawartość
+credits_frame = ttk.Frame(tab5, padding=20)
+credits_frame.pack(expand=1, fill='both')
+
+# Tytuł projektu
+title_label = ttk.Label(credits_frame, text="Project Credits", font=('Arial', 18, 'bold'))
+title_label.pack(pady=(10, 20))
+
+# Lista informacji o projekcie
+credits_text = [
+    "Project authors: Krzysztof Drobnik, Maksymilian Jurewicz",
+    "Project name: Calculating air quality based on few basic pollutants using Open Weather API and basic GUI",
+    "University: University of Economics in Poznań",
+    "Subject: Programming and Data Processing",
+    "Supervisor: mgr. Adam Gałązkiewicz",
+    "Field of study: Industry 4.0",
+    "Study year: 1"
+]
+
+# Wyświetlanie informacji w pętli
+for text in credits_text:
+    label = ttk.Label(credits_frame, text=text, font=('Arial', 12), anchor='w', justify='left')
+    label.pack(anchor='w', pady=5)
+
+# Separator na końcu
+separator = ttk.Separator(credits_frame, orient='horizontal')
+separator.pack(fill='x', pady=(20, 10))
+
+# Wczytywanie i wyświetlanie obrazków
+def load_and_display_image(frame, path):
+    try:
+        image = Image.open(path)
+        image = image.resize((200, 150), Image.Resampling.LANCZOS)  # Zmiana metody resamplingu
+        photo = ImageTk.PhotoImage(image)
+        label = ttk.Label(frame, image=photo)
+        label.image = photo  # Zapisywanie referencji, aby nie zostało usunięte przez garbage collector
+        label.pack(pady=10)
+    except Exception as e:
+        error_label = ttk.Label(frame, text=f"Error loading image: {path}", font=('Arial', 10), foreground='red')
+        error_label.pack(pady=5)
+
+# Wyświetlenie pierwszego obrazka
+load_and_display_image(credits_frame, 'jpg1.jpg')
+
+# Wyświetlenie drugiego obrazka
+load_and_display_image(credits_frame, 'jpg2.jpg')
 
 root.mainloop()
 
