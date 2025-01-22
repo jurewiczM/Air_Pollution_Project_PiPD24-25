@@ -7,31 +7,33 @@ from tkinter import ttk
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import datetime as dt
+from datetime import datetime, timezone
 
-    
-#metoda: dane historyczne z jednej daty 7 dni wstecz
-def load_historical_data_1WeekBefore(lat, lon, start, end):
+
+
+def load_historical_data_1WeekBefore(lat, lon, start):
     key = '986b86d5d24bbace34084b1fcda169bd'
     historical_data = []
-    # Generate timestamps for the 7 days between `start` and `end`
-    for i in range(7):
-        day_start = start - (i * 86400)  # Start of the day
-        
-        historical_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution/history?lat={lat}&lon={lon}&start={day_start}&end={day_start+3600}&appid={key}'
-        
+
+    # Generate hourly timestamps for the 7 days between `start` and `end`
+    for i in range(0, 7 * 24):  # 7 days * 24 hours
+        hour_start = start - (i * 3600)  # Subtract i hours from start
+        hour_end = hour_start # End of the hour
+
+        historical_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution/history?lat={lat}&lon={lon}&start={hour_start}&end={hour_end}&appid={key}'
+
         response = requests.get(historical_api_url)
-        if response.status_code == 200:
-            response_body_json = json.loads(response.text)
-            historical_data.extend(response_body_json.get("list", []))
-        else:
-            print(f"Error fetching data for timestamp {day_start}: {response.status_code}")
+
+
+        response_body_json = json.loads(response.text)
+        historical_data.extend(response_body_json.get("list", []))
 
     # Process the historical data
     historical_data_table = []
     for data_point in historical_data:
         components = data_point["components"]
         historical_data_table.append({
+            "timestamp": data_point.get("dt", 0),  # Include timestamp
             "so2": components.get("so2", 0.0),
             "no2": components.get("no2", 0.0),
             "pm10": components.get("pm10", 0.0),
@@ -42,31 +44,29 @@ def load_historical_data_1WeekBefore(lat, lon, start, end):
             "no": components.get("no", 0.0)
         })
 
-    print(json.dumps(historical_data_table, indent=2))
+    return historical_data_table
 
-
-
-def load_historical_data_6hwindow(lat, lon, end):
+def load_historical_data_24hwindow(lat, lon, end):
     key = '986b86d5d24bbace34084b1fcda169bd'
     historical_data = []
 
     day_end = end  # Start of the day
-    day_start = day_end - 3600*6      # (6 hours later)
+    day_start = day_end - 3600*24    # (6 hours later)
         
     historical_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution/history?lat={lat}&lon={lon}&start={day_start}&end={day_end}&appid={key}'
         
     response = requests.get(historical_api_url)
-    if response.status_code == 200:
-            response_body_json = json.loads(response.text)
-            historical_data.extend(response_body_json.get("list", []))
-    else:
-            print(f"Error fetching data for timestamp {day_start}: {response.status_code}")
+
+    response_body_json = json.loads(response.text)
+    historical_data.extend(response_body_json.get("list", []))
+
 
     # Process the historical data
     historical_data_table = []
     for data_point in historical_data:
         components = data_point["components"]
         historical_data_table.append({
+            "timestamp": data_point.get("dt", 0),
             "so2": components.get("so2", 0.0),
             "no2": components.get("no2", 0.0),
             "pm10": components.get("pm10", 0.0),
@@ -77,8 +77,7 @@ def load_historical_data_6hwindow(lat, lon, end):
             "no": components.get("no", 0.0)
         })
 
-    print(json.dumps(historical_data_table, indent=2))
-
+    return historical_data_table
 
 # loading the air pollution elements ant their quantity based on latitude and longitude
 def load_pollution_gps_code(lat, lon):
@@ -427,6 +426,117 @@ def display_co_placement(lat, lon):
     fig = display_air_pollution_element_with_category_placement(value, limits, "Category of carbon monoxide (CO) based on value", limits[5])
     return fig
 
+def display_comparison_chart(lat_c1, lon_c1, lat_c2, lon_c2, city1, city2):
+    # Dane zanieczyszczeń powietrza dla dwóch miast (tabele)
+    data_city1 = load_pollution_gps_code(lat_c1, lon_c1)[0:6]
+    data_city2 = load_pollution_gps_code(lat_c2, lon_c2)[0:6]
+
+    # Kategorie zanieczyszczeń
+    categories = ['SO2', 'NO2', 'PM10', 'PM2.5', 'O3', 'CO']
+
+    x = np.arange(len(categories))  # Lokalizacje dla grupy kategorii
+    width = 0.35  # Szerokość słupków
+
+    # Tworzenie wykresu
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars1 = ax.bar(x - width / 2, data_city1, width, label=city1, color='skyblue')
+    bars2 = ax.bar(x + width / 2, data_city2, width, label=city2, color='orange')
+
+    # Dostosowanie wykresu
+    ax.set_xlabel('Pollutants')
+    ax.set_ylabel('Pollution level')
+    ax.set_title('Pollution comparison chart')
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories)
+    ax.legend()
+
+    # Usunięcie kratki
+    ax.grid(False)
+
+    # Dodanie wartości na szczycie słupków
+    for bar in bars1 + bars2:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, height + 1, f'{height}', ha='center', va='bottom')
+
+    plt.tight_layout()
+    return fig
+
+def display_pollutants_development_chart(lat, lon, data, max_ticks=10):
+    # Wyciąganie wartości czasu i konwersja do formatu czytelnego
+    timestamps = [datetime.fromtimestamp(item["timestamp"], tz=timezone.utc) for item in data]
+
+    # Wyciąganie wartości dla każdego składnika powietrza
+    so2 = [item["so2"] for item in data]
+    no2 = [item["no2"] for item in data]
+    pm10 = [item["pm10"] for item in data]
+    pm2_5 = [item["pm2_5"] for item in data]
+    o3 = [item["o3"] for item in data]
+    co = [item["co"] for item in data]
+
+    # Tworzenie jednej figury z dwoma osiami (jednym wykresem na każdej osi)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
+
+    # Wykres 1: Wszystkie składniki oprócz CO
+    ax1.plot(timestamps, so2, label='SO₂', marker='o')
+    ax1.plot(timestamps, no2, label='NO₂', marker='o')
+    ax1.plot(timestamps, pm10, label='PM₁₀', marker='o')
+    ax1.plot(timestamps, pm2_5, label='PM₂.₅', marker='o')
+    ax1.plot(timestamps, o3, label='O₃', marker='o')
+
+    ax1.set_title('Pollutants development (excluding CO)', fontsize=16)
+    ax1.set_xlabel('Time', fontsize=12)
+    ax1.set_ylabel('Concentration', fontsize=12)
+    ax1.grid(True, linestyle='--', alpha=0.6)
+
+    # Ustawienie etykiet na osi X: tylko co n-ty punkt
+    if len(timestamps) > max_ticks:
+        step = len(timestamps) // max_ticks
+    else:
+        step = 1
+    xticks = [timestamps[i] for i in range(0, len(timestamps), step)]
+
+    # Ustawianie etykiet na osi X
+    ax1.set_xticks(xticks)
+    ax1.set_xticklabels([ts.strftime('%Y-%m-%d %H:%M') for ts in xticks], rotation=45, ha="right", fontsize=6.5)
+
+    ax1.legend(loc='upper left', fontsize=10)
+
+    # Wykres 2: Tylko CO
+    ax2.plot(timestamps, co, label='CO', color='red', marker='o')
+
+    ax2.set_xlabel('Time', fontsize=12)
+    ax2.set_ylabel('Concentration (CO)', fontsize=12)
+    ax2.grid(True, linestyle='--', alpha=0.6)
+
+    # Ustawienie etykiet na osi X: tylko co n-ty punkt
+    ax2.set_xticks(xticks)
+    ax2.set_xticklabels([ts.strftime('%Y-%m-%d %H:%M') for ts in xticks], rotation=45, ha="right")
+
+    ax2.legend(loc='upper left', fontsize=10)
+
+    # Zwracanie jednej figury, która zawiera oba wykresy
+    return fig
+
+
+def display_pollutants_development_chart_24h(lat, lon):
+    now = datetime.now(timezone.utc)
+    rounded_time = now.replace(minute=0, second=0, microsecond=0)
+    unix_time = int(rounded_time.timestamp())
+    data = load_historical_data_24hwindow(lat, lon, unix_time)
+
+    fig = display_pollutants_development_chart(lat, lon, data)
+
+    return fig
+
+def display_pollutants_development_chart_7days(lat, lon):
+    now = datetime.now(timezone.utc)
+    rounded_time = now.replace(minute=0, second=0, microsecond=0)
+    unix_time = int(rounded_time.timestamp())
+    data = load_historical_data_1WeekBefore(lat, lon, unix_time)
+    fig = display_pollutants_development_chart(lat, lon, data)
+
+    return fig
+
 # Toggling the input fields
 def toggle_search_mode():
     if search_mode.get() == 'coordinates':
@@ -438,12 +548,34 @@ def toggle_search_mode():
         longitude_entry.config(state='disabled')
         city_entry.config(state='normal')
 
+# Toggling the input fields
+def toggle_compare_mode():
+    if compare_mode.get() == 'city':
+        for widget in [entry1, entry2]:
+            widget.config(state='normal')
+        for widget in [entry_gps1_lat, entry_gps1_long, entry_gps2_lat, entry_gps2_long]:
+            widget.config(state='disabled')
+    elif compare_mode.get() == 'gps':
+        for widget in [entry1, entry2]:
+            widget.config(state='disabled')
+        for widget in [entry_gps1_lat, entry_gps1_long, entry_gps2_lat, entry_gps2_long]:
+            widget.config(state='normal')
+
+def toggle_historical_mode():
+    if historical_chosen_mode.get() == 'city':
+        entry1_t2.config(state='normal')
+        for widget in [entry_gps1_lat_t2, entry_gps1_long_t2]:
+            widget.config(state='disabled')
+    elif historical_chosen_mode.get() == 'gps':
+        entry1_t2.config(state='disabled')
+        for widget in [entry_gps1_lat_t2, entry_gps1_long_t2]:
+            widget.config(state='normal')
+
 # displaying the basic pollution data
 def display_data():
 
     # Sprawdzenie trybu wyszukiwania
     try:
-        global lat, lon
         if search_mode.get() == 'coordinates':
             lat = latitude_entry.get()
             lon = longitude_entry.get()
@@ -515,6 +647,91 @@ def display_data():
     except Exception as e:
         data_display.config(text="Cannot display data for this input. Change the data and try again!")
 
+def adjust_search_mode_return_tab1():
+    return_table = []
+    if search_mode.get() == 'city':
+        city = city_entry.get()
+        lat = convert_city_to_gps(city)[0]
+        lon = convert_city_to_gps(city)[1]
+        country = convert_gps_to_city(lat, lon)[1]
+        return_table.append(lat)
+        return_table.append(lon)
+        return_table.append(city)
+        return_table.append(country)
+
+    elif search_mode.get() == 'coordinates':
+        lat = latitude_entry.get()
+        lon = longitude_entry.get()
+        city = convert_gps_to_city(lat, lon)[0]
+        country = convert_gps_to_city(lat, lon)[1]
+        return_table.append(lat)
+        return_table.append(lon)
+        return_table.append(city)
+        return_table.append(country)
+    return return_table
+
+def adjust_comparison_mode_return_tab3():
+    return_table = []
+    if compare_mode.get() == 'city':
+        city1 = entry1.get()
+        city2 = entry2.get()
+        lat_c1 = convert_city_to_gps(city1)[0]
+        lon_c1 = convert_city_to_gps(city1)[1]
+        lat_c2 = convert_city_to_gps(city2)[0]
+        lon_c2 = convert_city_to_gps(city2)[1]
+        country1 = convert_gps_to_city(lat_c1, lon_c1)[1]
+        country2 = convert_gps_to_city(lat_c2, lon_c2)[1]
+        return_table.append(lat_c1)
+        return_table.append(lon_c1)
+        return_table.append(city1)
+        return_table.append(country1)
+        return_table.append(lat_c2)
+        return_table.append(lon_c2)
+        return_table.append(city2)
+        return_table.append(country2)
+
+
+    elif compare_mode.get() == 'gps':
+        lat_c1 = entry_gps1_lat.get()
+        lon_c1 = entry_gps1_long.get()
+        lat_c2 = entry_gps2_lat.get()
+        lon_c2 = entry_gps2_long.get()
+        city1 = convert_gps_to_city(lat_c1, lon_c1)[0]
+        country1 = convert_gps_to_city(lat_c1, lon_c1)[1]
+        city2 = convert_gps_to_city(lat_c2, lon_c2)[0]
+        country2 = convert_gps_to_city(lat_c2, lon_c2)[1]
+        return_table.append(lat_c1)
+        return_table.append(lon_c1)
+        return_table.append(city1)
+        return_table.append(country1)
+        return_table.append(lat_c2)
+        return_table.append(lon_c2)
+        return_table.append(city2)
+        return_table.append(country2)
+    return return_table
+
+def adjust_historical_data_mode():
+    return_table = []
+    if historical_chosen_mode.get() == 'city':
+        city = entry1_t2.get()
+        lat = convert_city_to_gps(city)[0]
+        lon = convert_city_to_gps(city)[1]
+        country = convert_gps_to_city(lat, lon)[1]
+        return_table.append(lat)
+        return_table.append(lon)
+        return_table.append(city)
+        return_table.append(country)
+    elif historical_chosen_mode.get() == 'gps':
+        lat = entry_gps1_lat_t2.get()
+        lon = entry_gps1_long_t2.get()
+        city = convert_gps_to_city(lat, lon)[0]
+        country = convert_gps_to_city(lat, lon)[1]
+        return_table.append(lat)
+        return_table.append(lon)
+        return_table.append(city)
+        return_table.append(country)
+    return return_table
+
 #displaying a new window with trehhold chart
 def show_thresholds_window():
     # Tworzymy nowe okno do wyświetlenia wykresu
@@ -533,11 +750,13 @@ def show_thresholds_window():
 #displaying a new window with category count chart
 def show_category_count_window():
     try:
+        data = adjust_search_mode_return_tab1()
         # Tworzymy nowe okno do wyświetlenia wykresu
         category_count_window = tk.Toplevel(root)
         category_count_window.title("Category Count Chart")
         category_count_window.geometry('800x600')
-
+        lat = data[0]
+        lon = data[1]
         # Wywołaj funkcję do rysowania wykresu w tym nowym oknie
         fig = count_and_display_air_quality_categories(lat, lon)
 
@@ -548,9 +767,44 @@ def show_category_count_window():
     except Exception as e:
         data_display.config(text="Cannot display data for this input. Change the data and try again!")
 
+def show_pollutants_development_window_24h():
+    try:
+        data = adjust_historical_data_mode()
+        pollutants_development_window = tk.Toplevel(root)
+        pollutants_development_window.title("Pollutants Development Chart")
+        pollutants_development_window.geometry('900x1000')
+        lat = data[0]
+        lon = data[1]
+
+        fig = display_pollutants_development_chart_24h(lat, lon)
+        canvas = FigureCanvasTkAgg(fig, master=pollutants_development_window)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+    except Exception as e:
+        label_area_t2.config(text="Cannot display data for this input. Change the data and try again!")
+
+def show_pollutants_development_widnow_7days():
+    try:
+        data = adjust_historical_data_mode()
+        pollutants_development_window = tk.Toplevel(root)
+        pollutants_development_window.title("Pollutants Development Chart")
+        pollutants_development_window.geometry('900x1000')
+        lat = data[0]
+        lon = data[1]
+        fig = display_pollutants_development_chart_7days(lat, lon)
+        canvas = FigureCanvasTkAgg(fig, master=pollutants_development_window)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+    except Exception as e:
+        label_area_t2.config(text="Cannot display data for this input. Change the data and try again!")
+
+
 #displaying category chart with pollutant value for selected pollutant
 def display_analysis():
     try:
+        data = adjust_search_mode_return_tab1()
+        lat = data[0]
+        lon = data[1]
         selected_option = analysis_combobox.get()
         analysis_window = tk.Toplevel(root)
         analysis_window.title(f"Analysis: {selected_option}")
@@ -590,25 +844,251 @@ def display_analysis():
     except Exception as e:
         data_display.config(text="Cannot display data for this input. Change the data and try again!")
 
-#porównanie dwóch miast - nie wiem jeszcze jak mogłoby to wyglądać/M
-def compare_cities(city1, city2):
+def on_click_comparison_chart():
+    try:
+        data = adjust_comparison_mode_return_tab3()
+        comparison_window = tk.Toplevel(root)
+        comparison_window.title("Comparison Chart")
+        comparison_window.geometry('800x600')
+        lat_c1 = data[0]
+        lon_c1 = data[1]
+        lat_c2 = data[4]
+        lon_c2 = data[5]
+        city1 = data[2]
+        city2 = data[6]
 
-    coords_city1 = convert_city_to_gps(city1)
-    coords_city2 = convert_city_to_gps(city2)
-    
-    city1_pollution = load_pollution_gps_code(coords_city1[0], coords_city1[1])
-    city2_pollution = load_pollution_gps_code(coords_city2[0], coords_city2[1])
+        fig = display_comparison_chart(lat_c1, lon_c1, lat_c2, lon_c2, city1, city2)
 
-    print(f"Pollution data for {city1}: {city1_pollution}")
-    print(f"Pollution data for {city2}: {city2_pollution}")
+        canvas = FigureCanvasTkAgg(fig, master=comparison_window)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+    except Exception as e:
+        label_area1.config(text = "Cannot display data for this input\n. Change the data and try again!")
+        label_area2.config(text = "Cannot display data for this input\n. Change the data and try again!")
 
-    
-    
+# Function to fetch input and compare cities
+def fetch_input_comparison():
+    try:
+            if compare_mode.get() == "city":
+                city1 = entry1.get()
+                city2 = entry2.get()
+
+                lat_and_lon_c1 = convert_city_to_gps(city1)
+                lat_and_lon_c2 = convert_city_to_gps(city2)
+
+                pol_data_c1 = load_pollution_gps_code(lat_and_lon_c1[0], lat_and_lon_c1[1])
+                pol_data_c2 = load_pollution_gps_code(lat_and_lon_c2[0], lat_and_lon_c2[1])
+
+                country1 = convert_gps_to_city(lat_and_lon_c1[0], lat_and_lon_c1[1])[1]
+                country2 = convert_gps_to_city(lat_and_lon_c2[0], lat_and_lon_c2[1])[1]
+
+                aqi1 = get_air_quality_index(lat_and_lon_c1[0], lat_and_lon_c1[1])
+                aqi2 = get_air_quality_index(lat_and_lon_c2[0], lat_and_lon_c2[1])
+
+                so2_category1 = get_air_pollutant_category(pol_data_c1[0], [0, 20, 80, 250, 350, 400])
+                no2_category1= get_air_pollutant_category(pol_data_c1[1], [0, 40, 70, 150, 200, 250])
+                pm10_category1 = get_air_pollutant_category(pol_data_c1[2], [0, 20, 50, 100, 200, 250])
+                pm25_category1= get_air_pollutant_category(pol_data_c1[3], [0, 10, 25, 50, 75, 100])
+                o3_category1 = get_air_pollutant_category(pol_data_c1[4], [0, 60, 100, 140, 180, 220])
+                co_category1 = get_air_pollutant_category(pol_data_c1[5], [0, 4400, 9400, 12400, 15400, 17000])
+
+                so2_category2 = get_air_pollutant_category(pol_data_c2[0], [0, 20, 80, 250, 350, 400])
+                no2_category2 = get_air_pollutant_category(pol_data_c2[1], [0, 40, 70, 150, 200, 250])
+                pm10_category2 = get_air_pollutant_category(pol_data_c2[2], [0, 20, 50, 100, 200, 250])
+                pm25_category2 = get_air_pollutant_category(pol_data_c2[3], [0, 10, 25, 50, 75, 100])
+                o3_category2 = get_air_pollutant_category(pol_data_c2[4], [0, 60, 100, 140, 180, 220])
+                co_category2 = get_air_pollutant_category(pol_data_c2[5], [0, 4400, 9400, 12400, 15400, 17000])
+
+                label_area1.config(text=f"Comparing by City:\n"
+                                        f"City: {city1}\n"
+                                        f"Country: {country1}\n"
+                                        f"GPS: ({round(lat_and_lon_c1[0], 4)}, {round(lat_and_lon_c1[1], 4)})\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"AQI index: {aqi1}\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"SO₂ level: {pol_data_c1[0]} µg/m³ ({so2_category1})\n"
+                                        f"NO₂ level: {pol_data_c1[1]} µg/m³ ({no2_category1})\n"
+                                        f"PM10 level: {pol_data_c1[2]} µg/m³ ({pm10_category1})\n"
+                                        f"PM2.5 level: {pol_data_c1[3]} µg/m³ ({pm25_category1})\n"
+                                        f"O₃ level: {pol_data_c1[4]} µg/m³ ({o3_category1})\n"
+                                        f"CO level: {pol_data_c1[5]} µg/m³ ({co_category1})\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"Additional pollutants:\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"NH₃ level: {pol_data_c1[6]} µg/m³\n"
+                                        f"NO level: {pol_data_c1[7]} µg/m³"
+                                   )
+
+                label_area2.config(text=f"Comparing by City:\n"
+                                        f"City: {city2}\n"
+                                        f"Country: {country2}\n"
+                                        f"GPS: ({round(lat_and_lon_c2[0], 4)}, {round(lat_and_lon_c2[1], 4)})\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"AQI index: {aqi2}\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"SO₂ level: {pol_data_c2[0]} µg/m³ ({so2_category2})\n"
+                                        f"NO₂ level: {pol_data_c2[1]} µg/m³ ({no2_category2})\n"
+                                        f"PM10 level: {pol_data_c2[2]} µg/m³ ({pm10_category2})\n"
+                                        f"PM2.5 level: {pol_data_c2[3]} µg/m³ ({pm25_category2})\n"
+                                        f"O₃ level: {pol_data_c2[4]} µg/m³ ({o3_category2})\n"
+                                        f"CO level: {pol_data_c2[5]} µg/m³ ({co_category2})\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"Additional pollutants:\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"NH₃ level: {pol_data_c2[6]} µg/m³\n"
+                                        f"NO level: {pol_data_c2[7]} µg/m³"
+                                   )
+
+            elif compare_mode.get() == "gps":
+                lat_c1 = float(entry_gps1_lat.get())
+                lon_c1 = float(entry_gps1_long.get())
+                city1 = convert_gps_to_city(lat_c1, lon_c1)[0]
+                country1 = convert_gps_to_city(lat_c1, lon_c1)[1]
+                pollution_city1 = load_pollution_gps_code(lat_c1, lon_c1)
+                aqi_cty1 = get_air_quality_index(lat_c1, lon_c1)
+
+                lat_c2 = float(entry_gps2_lat.get())
+                lon_c2 = float(entry_gps2_long.get())
+                city2 = convert_gps_to_city(lat_c2, lon_c2)[0]
+                country2 = convert_gps_to_city(lat_c2, lon_c2)[1]
+                pollution_city2 = load_pollution_gps_code(lat_c2, lon_c2)
+                aqi_cty2 = get_air_quality_index(lat_c2, lon_c2)
+
+                so2_category1 = get_air_pollutant_category(pollution_city1[0], [0, 20, 80, 250, 350, 400])
+                no2_category1 = get_air_pollutant_category(pollution_city1[1], [0, 40, 70, 150, 200, 250])
+                pm10_category1 = get_air_pollutant_category(pollution_city1[2], [0, 20, 50, 100, 200, 250])
+                pm25_category1 = get_air_pollutant_category(pollution_city1[3], [0, 10, 25, 50, 75, 100])
+                o3_category1 = get_air_pollutant_category(pollution_city1[4], [0, 60, 100, 140, 180, 220])
+                co_category1 = get_air_pollutant_category(pollution_city1[5], [0, 4400, 9400, 12400, 15400, 17000])
+
+                so2_category2 = get_air_pollutant_category(pollution_city2[0], [0, 20, 80, 250, 350, 400])
+                no2_category2 = get_air_pollutant_category(pollution_city2[1], [0, 40, 70, 150, 200, 250])
+                pm10_category2 = get_air_pollutant_category(pollution_city2[2], [0, 20, 50, 100, 200, 250])
+                pm25_category2= get_air_pollutant_category(pollution_city2[3], [0, 10, 25, 50, 75, 100])
+                o3_category2 = get_air_pollutant_category(pollution_city2[4], [0, 60, 100, 140, 180, 220])
+                co_category2 = get_air_pollutant_category(pollution_city2[5], [0, 4400, 9400, 12400, 15400, 17000])
+
+                label_area1.config(text=f"Comparing by Coordinates:\nGPS: ({round(lat_c1, 4)}, {round(lon_c1, 4)})\n"
+                                         f"City found: {city1}\n"
+                                         f"Country: {country1}\n"
+                                         f"----------------------------------------------------------------\n"
+                                         f"AQI index: {aqi_cty1}\n"
+                                         f"----------------------------------------------------------------\n"
+                                         f"SO₂ level: {pollution_city1[0]} µg/m³ ({so2_category1})\n"
+                                         f"NO₂ level: {pollution_city1[1]} µg/m³ ({no2_category1})\n"
+                                         f"PM10 level: {pollution_city1[2]} µg/m³ ({pm10_category1})\n"
+                                         f"PM2.5 level: {pollution_city1[3]} µg/m³ ({pm25_category1})\n"
+                                         f"O₃ level: {pollution_city1[4]} µg/m³ ({o3_category1})\n"
+                                         f"CO level: {pollution_city1[5]} µg/m³ ({co_category1})\n"
+                                         f"----------------------------------------------------------------\n"
+                                         f"Additional pollutants:\n"
+                                         f"----------------------------------------------------------------\n"
+                                         f"NH₃ level: {pollution_city1[6]} µg/m³\n"
+                                         f"NO level: {pollution_city1[7]} µg/m³")
+
+                label_area2.config(text=f"Comparing by Coordinates:\nGPS: ({round(lat_c2, 4)}, {round(lon_c2, 4)})\n"
+                                        f"City found: {city2}\n"
+                                        f"Country: {country2}\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"AQI index: {aqi_cty2}\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"SO₂ level: {pollution_city2[0]} µg/m³ ({so2_category2})\n"
+                                        f"NO₂ level: {pollution_city2[1]} µg/m³ ({no2_category2})\n"
+                                        f"PM10 level: {pollution_city2[2]} µg/m³ ({pm10_category2})\n"
+                                        f"PM2.5 level: {pollution_city2[3]} µg/m³ ({pm25_category2})\n"
+                                        f"O₃ level: {pollution_city2[4]} µg/m³ ({o3_category2})\n"
+                                        f"CO level: {pollution_city2[5]} µg/m³ ({co_category2})\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"Additional pollutants:\n"
+                                        f"----------------------------------------------------------------\n"
+                                        f"NH₃ level: {pollution_city2[6]} µg/m³\n"
+                                        f"NO level: {pollution_city2[7]} µg/m³")
+
+            show_chart_button.grid(row=11, column=0, columnspan=2, pady=10)
+    except Exception as e:
+        label_area1.config(text="Input data is invalid\n"
+                                "or no data found!")
+        label_area2.config(text="Input data is invalid\n"
+                                "or no data found for this input!")
+
+def fetch_input_historical_data():
+    try:
+        if historical_chosen_mode.get() == 'city':
+            city = entry1_t2.get()
+            lat = convert_city_to_gps(city)[0]
+            lon = convert_city_to_gps(city)[1]
+            country = convert_gps_to_city(lat, lon)[1]
+
+
+            label_area_t2.config(text=f"Loading historical data by city name: {city}....\n"
+                                      f"\n"
+                                      f"......................................................................................................................................................\n"
+                                      f"\n"
+                                      f"Data found!\n"
+                                      f"\n"
+                                      f"Country: {country}\n"
+                                      f"GPS: ({lat}, {lon})\n"
+                                      f"\n"
+                                      f"Click 'Last 24h' button to display pollution chart\n"
+                                      f"for the last 24 hours for input location with hourly step\n"
+                                      f"\n"
+                                      f".......................................................................................................................................................\n"
+                                      f"\n"
+                                      f"Click 'Last Week' button to display pollution chart\n"
+                                      f"for the last 168 hours for input location with hourly step\n"
+                                      f".......................................................................................................................................................\n"
+                                                                )
+        elif historical_chosen_mode.get() == 'gps':
+            lat = entry_gps1_lat_t2.get()
+            lon = entry_gps1_long_t2.get()
+            city = convert_gps_to_city(lat, lon)[0]
+            country = convert_gps_to_city(lat, lon)[1]
+
+
+            label_area_t2.config(text=f"Loading historical data by GPS: ({lat}, {lon})....\n"
+                                      f"\n"
+                                      f"......................................................................................................................................................\n"
+                                      f"\n"
+                                      f"Data found!\n"
+                                      f"\n"
+                                      f"City: {city}\n"
+                                      f"Country: {country}\n"
+                                      f"\n"
+                                      f"Click 'Last 24h' button to display pollution chart\n"
+                                      f"for the last 24 hours for input location with hourly step\n"
+                                      f"\n"
+                                      f".......................................................................................................................................................\n"
+                                      f"\n"
+                                      f"Click 'Last Week' button to display pollution chart\n"
+                                      f"for the last 168 hours for input location with hourly step\n"
+                                      f".......................................................................................................................................................\n"
+
+
+                                                                )
+        last_24_hours_button.grid(row=11, column=1, padx=10, pady=20, sticky="w")
+        last_7_days_button.grid(row=11, column=0, padx=10, pady=20, sticky="e")
+    except Exception as e:
+        label_area_t2.config(text="Input data is invalid or no data found!")
+
+
+def update_mode_label():
+    if compare_mode.get() == 'city':
+        mode_label.set('Comparing by City')
+    elif compare_mode.get() == 'gps':
+        mode_label.set('Comparing by GPS')
+
+def update_historical_mode_label():
+    if historical_chosen_mode.get() == 'city':
+        mode_label_t2.set('Load historical data by City')
+    elif historical_chosen_mode.get() == 'gps':
+        mode_label_t2.set('Load historical data by GPS')
+
+
 
 
 root = tk.Tk()
 root.title('Check the air pollution in your area!')
-root.geometry('555x700')
+root.geometry('555x790')
 
 
 # Zakładki
@@ -694,127 +1174,139 @@ analysis_combobox = ttk.Combobox(tab1, values=["Sulphur dioxide (SO₂)", "Nitro
 # Przycisk "Display Analysis"
 analysis_button = ttk.Button(tab1, text="Display Analysis", command=display_analysis, width=20, padding=10)
 
-# Zakładka 2 (dane historyczne)
-# Metoda dla 1 tygodnia
-def on_fetch_data_1week():
-    try:
-        lat = float(lat_entry.get())
-        lon = float(lon_entry.get())
-        end_timestamp = round(dt.datetime.now().timestamp())
 
 
-        start_timestamp = end_timestamp - (7 * 86400)
-        result = load_historical_data_1WeekBefore(lat, lon, start_timestamp, end_timestamp)
 
-        result_label.config(text=result)
-    except ValueError:
-        result_label.config(text="Invalid input. Please enter valid latitude, longitude, and timestamp.")
-
-# metoda dla 6 godzin
-def on_fetch_data_6hours():
-    try:
-        lat = float(lat_entry.get())
-        lon = float(lon_entry.get())
-        end_timestamp = round(dt.datetime.now().timestamp())
-
-        result = load_historical_data_6hwindow(lat, lon, end_timestamp)
-
-        result_label.config(text=result)
-    except ValueError:
-        result_label.config(text="Invalid input. Please enter valid latitude, longitude, and timestamp.")
 
 tab2 = ttk.Frame(tab_control)
 tab_control.add(tab2, text='Historical Data')
-label2 = ttk.Label(tab2, text='Enter coordinates and end timestamp', font=('Arial', 14))
-label2.pack(expand=1, fill='both')
+tab2.columnconfigure(0, weight=1)
+tab2.columnconfigure(1, weight=1)
 
-lat_label = ttk.Label(tab2, text="Szerokosc:")
-lat_label.pack()
-lat_entry = ttk.Entry(tab2)
-lat_entry.pack()
+# Selection Mode with Radio Buttons
+historical_chosen_mode = tk.StringVar(value='city')
+mode_label_t2 = tk.StringVar(value='Loading historical data by City')
 
-lon_label = ttk.Label(tab2, text="Dlugosc:")
-lon_label.pack()
-lon_entry = ttk.Entry(tab2)
-lon_entry.pack()
+radio_city_t2 = ttk.Radiobutton(tab2, text='Load historical data by City', variable=historical_chosen_mode, value='city', command=lambda: [toggle_historical_mode(), update_historical_mode_label()])
+radio_city_t2.grid(row=0, column=0, columnspan=2, pady=5)
+
+radio_gps_t2 = ttk.Radiobutton(tab2, text='Load historical data by GPS', variable=historical_chosen_mode, value='gps', command=lambda: [toggle_historical_mode(), update_historical_mode_label()])
+radio_gps_t2.grid(row=1, column=0, columnspan=2, pady=5)
+
+mode_display_label_t2 = ttk.Label(tab2, textvariable=mode_label_t2, font=('Arial', 12, 'bold'))
+mode_display_label_t2.grid(row=2, column=0, columnspan=2, pady=5)
+
+# --- Column 1: City 1 ---
+label1_t2 = tk.Label(tab2, text="Enter city name:")
+label1_t2.grid(row=3, column=0, padx=10, pady=5, sticky="w")
+entry1_t2 = tk.Entry(tab2)
+entry1_t2.grid(row=4, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+
+label_gps1_lat_t2 = tk.Label(tab2, text="Latitude:")
+label_gps1_lat_t2.grid(row=5, column=0, padx=10, pady=2, sticky="w")
+entry_gps1_lat_t2 = tk.Entry(tab2)
+entry_gps1_lat_t2.grid(row=6, column=0, columnspan=2, padx=10, pady=2, sticky="ew")
+
+label_gps1_long_t2 = tk.Label(tab2, text="Longitude:")
+label_gps1_long_t2.grid(row=7, column=0, padx=10, pady=2, sticky="w")
+entry_gps1_long_t2 = tk.Entry(tab2)
+entry_gps1_long_t2.grid(row=8, column=0, columnspan=2, padx=10, pady=2, sticky="ew")
+
+# --- Data Display Areas ---
+label_area_t2 = tk.Label(tab2, text="data....", height=20, width=70, relief="solid", anchor="nw", justify="left", background='white', font=('Arial', 11))
+label_area_t2.grid(row=9, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
+
+fetch_input_button = ttk.Button(tab2, text='Fetch Input', command=fetch_input_historical_data, width=30)
+fetch_input_button.grid(row=10, column=0, columnspan=2, pady=10)
+
+# --- Last Week and Last 24h Buttons (initially hidden) ---
+last_7_days_button = ttk.Button(tab2, text='Last Week', command = show_pollutants_development_widnow_7days, width=30, padding=10)
+last_24_hours_button = ttk.Button(tab2, text='Last 24h', command=show_pollutants_development_window_24h, width=30, padding=10)
+
+toggle_historical_mode()
 
 
 
 
-# Przyciski różne, do pobierania danych
-fetch_1week_button = ttk.Button(tab2, text="Zeszly tydzien", command=on_fetch_data_1week)
-fetch_1week_button.pack()
-
-fetch_6hours_button = ttk.Button(tab2, text="Ostatnie 6 godzin", command=on_fetch_data_6hours)
-fetch_6hours_button.pack()
-
-result_label = ttk.Label(tab2, text="")
-result_label.pack()
-
-# Zakładka 3 (porownanie)
-# Zakładka 3 (pollution comparison)
 tab3 = ttk.Frame(tab_control)
 tab_control.add(tab3, text='Pollution Compare')
 
-# Use a grid layout for better organization
+# Grid Configuration
 tab3.columnconfigure(0, weight=1)
 tab3.columnconfigure(1, weight=1)
 
+# Selection Mode with Radio Buttons
+compare_mode = tk.StringVar(value='city')
+mode_label = tk.StringVar(value='Comparing by City')
+
+
+
+
+radio_city = ttk.Radiobutton(tab3, text='Compare by City', variable=compare_mode, value='city', command=lambda: [toggle_compare_mode(), update_mode_label()])
+radio_city.grid(row=0, column=0, columnspan=2, pady=5)
+
+radio_gps = ttk.Radiobutton(tab3, text='Compare by GPS', variable=compare_mode, value='gps', command=lambda: [toggle_compare_mode(), update_mode_label()])
+radio_gps.grid(row=1, column=0, columnspan=2, pady=5)
+
+mode_display_label = ttk.Label(tab3, textvariable=mode_label, font=('Arial', 12, 'bold'))
+mode_display_label.grid(row=2, column=0, columnspan=2, pady=5)
+
 # --- Column 1: City 1 ---
 label1 = tk.Label(tab3, text="Enter City 1:")
-label1.grid(row=0, column=0, padx=10, pady=5, sticky="w")
-
+label1.grid(row=3, column=0, padx=10, pady=5, sticky="w")
 entry1 = tk.Entry(tab3)
-entry1.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
+entry1.grid(row=4, column=0, padx=10, pady=5, sticky="ew")
 
-text_area1 = tk.Text(tab3, height=10, width=40)
-text_area1.grid(row=2, column=0, padx=10, pady=5, sticky="nsew")
+label_gps1_lat = tk.Label(tab3, text="Latitude:")
+label_gps1_lat.grid(row=5, column=0, padx=10, pady=2, sticky="w")
+entry_gps1_lat = tk.Entry(tab3)
+entry_gps1_lat.grid(row=6, column=0, padx=10, pady=2, sticky="ew")
+
+label_gps1_long = tk.Label(tab3, text="Longitude:")
+label_gps1_long.grid(row=7, column=0, padx=10, pady=2, sticky="w")
+entry_gps1_long = tk.Entry(tab3)
+entry_gps1_long.grid(row=8, column=0, padx=10, pady=2, sticky="ew")
 
 # --- Column 2: City 2 ---
 label2 = tk.Label(tab3, text="Enter City 2:")
-label2.grid(row=0, column=1, padx=10, pady=5, sticky="w")
-
+label2.grid(row=3, column=1, padx=10, pady=5, sticky="w")
 entry2 = tk.Entry(tab3)
-entry2.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+entry2.grid(row=4, column=1, padx=10, pady=5, sticky="ew")
 
-text_area2 = tk.Text(tab3, height=10, width=40)
-text_area2.grid(row=2, column=1, padx=10, pady=5, sticky="nsew")
+label_gps2_lat = tk.Label(tab3, text="Latitude:")
+label_gps2_lat.grid(row=5, column=1, padx=10, pady=2, sticky="w")
+entry_gps2_lat = tk.Entry(tab3)
+entry_gps2_lat.grid(row=6, column=1, padx=10, pady=2, sticky="ew")
 
-# Function to fetch input and compare cities
-def fetch_input():
-    city1 = entry1.get()  # Get city 1 name
-    city2 = entry2.get()  # Get city 2 name
-    
-    # Clear the text areas
-    text_area1.delete("1.0", tk.END)
-    text_area2.delete("1.0", tk.END)
-    
-    # Compare the cities and fetch pollution data
-    coords_city1 = convert_city_to_gps(city1)
-    coords_city2 = convert_city_to_gps(city2)
+label_gps2_long = tk.Label(tab3, text="Longitude:")
+label_gps2_long.grid(row=7, column=1, padx=10, pady=2, sticky="w")
+entry_gps2_long = tk.Entry(tab3)
+entry_gps2_long.grid(row=8, column=1, padx=10, pady=2, sticky="ew")
 
-    city1_pollution = load_pollution_gps_code(coords_city1[0], coords_city1[1])
-    city2_pollution = load_pollution_gps_code(coords_city2[0], coords_city2[1])
+# --- Data Display Areas ---
+label_area1 = tk.Label(tab3, text="City 1 data....", height=20, width=70, relief="solid", anchor="nw", justify="left", background='white', font=('Arial', 11))
+label_area1.grid(row=9, column=0, padx=10, pady=10, sticky="nsew")
 
-    # Display results in the respective text areas
-    text_area1.insert(tk.END, f"City: {city1}\n")
-    text_area1.insert(tk.END, f"GPS: {coords_city1}\n")
-    text_area1.insert(tk.END, f"Pollution: {city1_pollution}\n")
+label_area2 = tk.Label(tab3, text="City 2 data....", height=20, width=70, relief="solid", anchor="nw", justify="left", background='white', font=('Arial', 11))
+label_area2.grid(row=9, column=1, padx=10, pady=10, sticky="nsew")
 
-    text_area2.insert(tk.END, f"City: {city2}\n")
-    text_area2.insert(tk.END, f"GPS: {coords_city2}\n")
-    text_area2.insert(tk.END, f"Pollution: {city2_pollution}\n")
+# Compare Button
+compare_button = ttk.Button(tab3, text='Compare', command=fetch_input_comparison, width=20)
+compare_button.grid(row=10, column=0, columnspan=2, pady=20)
 
-# Create a button to trigger the fetch_input function
-button = tk.Button(tab3, text="Compare Cities", command=fetch_input)
-button.grid(row=3, column=0, columnspan=2, pady=10)
+show_chart_button = ttk.Button(tab3, text='Show Chart', command=on_click_comparison_chart, width=20)
+show_chart_button.grid(row=11, column=0, columnspan=2, pady=7)
+show_chart_button.grid_remove()  # Initially hidden
 
+toggle_compare_mode()
 
 # Zakładka 4 (prognoza)
 tab4 = ttk.Frame(tab_control)
 tab_control.add(tab4, text='Pollution forecast')
 label4 = ttk.Label(tab4, text='To jest zawartość zakładki 4', font=('Arial', 14))
 label4.pack(expand=1, fill='both')
+
+
 
 # Zakładka 5 (credits)
 tab5 = ttk.Frame(tab_control)
@@ -823,6 +1315,7 @@ label5 = ttk.Label(tab5, text='To jest zawartość zakładki 5', font=('Arial', 
 label5.pack(expand=1, fill='both')
 
 root.mainloop()
+
 
 
 
