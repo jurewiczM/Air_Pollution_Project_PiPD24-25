@@ -1456,7 +1456,7 @@ title_label.pack(pady=(10, 20))
 # Lista informacji o projekcie
 credits_text = [
     "Project authors: Krzysztof Drobnik, Maksymilian Jurewicz",
-    "Project name: Calculating air quality based on few basic pollutants using Open Weather API and basic GUI",
+    "Project name: Calculating air quality based on few basic pollutants\nusing Open Weather API and basic GUI",
     "University: University of Economics in Poznań",
     "Subject: Programming and Data Processing",
     "Supervisor: mgr. Adam Gałązkiewicz",
