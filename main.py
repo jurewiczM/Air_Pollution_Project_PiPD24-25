@@ -11,15 +11,15 @@ from datetime import datetime, timezone
 from regression import get_air_quality_prediction
 from PIL import Image, ImageTk
 
-
+# wczytywanie danych o zanieczyszczeniu powietrza z ostatniego tygodnia z godzinnym odstępem (7 dni x 24h = 168h)
 def load_historical_data_1WeekBefore(lat, lon, start):
     key = '986b86d5d24bbace34084b1fcda169bd'
     historical_data = []
 
-    # Generate hourly timestamps for the 7 days between `start` and `end`
-    for i in range(0, 7 * 24):  # 7 days * 24 hours
-        hour_start = start - (i * 3600)  # Subtract i hours from start
-        hour_end = hour_start # End of the hour
+
+    for i in range(0, 7 * 24):  # 7 dni * 24 godzin
+        hour_start = start - (i * 3600)
+        hour_end = hour_start
 
         historical_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution/history?lat={lat}&lon={lon}&start={hour_start}&end={hour_end}&appid={key}'
 
@@ -29,40 +29,7 @@ def load_historical_data_1WeekBefore(lat, lon, start):
         response_body_json = json.loads(response.text)
         historical_data.extend(response_body_json.get("list", []))
 
-    # Process the historical data
-    historical_data_table = []
-    for data_point in historical_data:
-        components = data_point["components"]
-        historical_data_table.append({
-            "timestamp": data_point.get("dt", 0),  # Include timestamp
-            "so2": components.get("so2", 0.0),
-            "no2": components.get("no2", 0.0),
-            "pm10": components.get("pm10", 0.0),
-            "pm2_5": components.get("pm2_5", 0.0),
-            "o3": components.get("o3", 0.0),
-            "co": components.get("co", 0.0),
-            "nh3": components.get("nh3", 0.0),
-            "no": components.get("no", 0.0)
-        })
 
-    return historical_data_table
-
-def load_historical_data_24hwindow(lat, lon, end):
-    key = '986b86d5d24bbace34084b1fcda169bd'
-    historical_data = []
-
-    day_end = end  # Start of the day
-    day_start = day_end - 3600*24    # (6 hours later)
-        
-    historical_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution/history?lat={lat}&lon={lon}&start={day_start}&end={day_end}&appid={key}'
-        
-    response = requests.get(historical_api_url)
-
-    response_body_json = json.loads(response.text)
-    historical_data.extend(response_body_json.get("list", []))
-
-
-    # Process the historical data
     historical_data_table = []
     for data_point in historical_data:
         components = data_point["components"]
@@ -80,10 +47,43 @@ def load_historical_data_24hwindow(lat, lon, end):
 
     return historical_data_table
 
-# loading the air pollution elements ant their quantity based on latitude and longitude
+#wczytywanie danych o zanieczysczeniu powietrza z ostatniej doby
+def load_historical_data_24hwindow(lat, lon, end):
+    key = '986b86d5d24bbace34084b1fcda169bd'
+    historical_data = []
+
+    day_end = end
+    day_start = day_end - 3600*24
+        
+    historical_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution/history?lat={lat}&lon={lon}&start={day_start}&end={day_end}&appid={key}'
+        
+    response = requests.get(historical_api_url)
+
+    response_body_json = json.loads(response.text)
+    historical_data.extend(response_body_json.get("list", []))
+
+
+    historical_data_table = []
+    for data_point in historical_data:
+        components = data_point["components"]
+        historical_data_table.append({
+            "timestamp": data_point.get("dt", 0),
+            "so2": components.get("so2", 0.0),
+            "no2": components.get("no2", 0.0),
+            "pm10": components.get("pm10", 0.0),
+            "pm2_5": components.get("pm2_5", 0.0),
+            "o3": components.get("o3", 0.0),
+            "co": components.get("co", 0.0),
+            "nh3": components.get("nh3", 0.0),
+            "no": components.get("no", 0.0)
+        })
+
+    return historical_data_table
+
+# wczytywanie obecnych danych o zanieczysczeniu powietrza (na podstawie koordynatów GPS)
 def load_pollution_gps_code(lat, lon):
     key = '986b86d5d24bbace34084b1fcda169bd'
-    # key = 'api key'
+
     air_pollution_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&appid={key}'
     response = requests.get(air_pollution_api_url)
     response_body = response.text
@@ -117,10 +117,10 @@ def load_pollution_gps_code(lat, lon):
 
     return air_pollution_table
 
-# converting latitude and longitude to country and city name
+# konwersja koordynatów GPS do miasta (i innych danych)
 def convert_gps_to_city(lat, lon):
     key = '986b86d5d24bbace34084b1fcda169bd'
-    # key = 'api key'
+
     geocoding_api_url = f'http://api.openweathermap.org/geo/1.0/reverse?lat={lat}&lon={lon}&limit={5}&appid={key}'
     response = requests.get(geocoding_api_url)
     response_body = response.text
@@ -145,7 +145,7 @@ def convert_gps_to_city(lat, lon):
 
     return city_geocoding_table
 
-# converting city names to their gps-cords
+# kowersja nazwy miasta to koordynatów geograficznych (i innych danych)
 def convert_city_to_gps(city_name):
     key = '986b86d5d24bbace34084b1fcda169bd'
     direct_geocoding_api_url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit={1}&appid={key}"
@@ -174,9 +174,10 @@ def convert_city_to_gps(city_name):
     city_geocoding_table.append(geocoded_country)
     return city_geocoding_table
 
+# pobieranie AQI (Air Quality Index)
 def get_air_quality_index(lat, lon):
     key = '986b86d5d24bbace34084b1fcda169bd'
-    # key = 'api key'
+
     air_pollution_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&appid={key}'
     response = requests.get(air_pollution_api_url)
     response_body = response.text
@@ -186,7 +187,7 @@ def get_air_quality_index(lat, lon):
 
     return air_quality_index
 
-# getting air quality index and the qir quality category
+# pobieranie kategorii AQI (Air Quality Index Category)
 def get_air_quality_index_category_name(lat, lon):
     air_quality_index = get_air_quality_index(lat, lon)
 
@@ -208,7 +209,7 @@ def get_air_quality_index_category_name(lat, lon):
 
     return air_quality_quantitive_name
 
-# displaying ranges for air quality categories for every air pollutant
+# wykres wartości granicznych dla składników powietrza i kategorii
 def display_treshhold_values():
 
     categories = ['Good', 'Fair', 'Moderate', 'Poor', 'Very Poor']
@@ -280,6 +281,7 @@ def display_treshhold_values():
 
     return fig
 
+# przypisanie wartościom zanieczyszczeń odpowiednich kategorii
 def get_air_pollutant_category(value, limits):
     categories = ['Good', 'Fair', 'Moderate', 'Poor', 'Very Poor']
     if value > limits[5]:
@@ -288,7 +290,8 @@ def get_air_pollutant_category(value, limits):
         if limits[i] <= value < limits[i + 1]:
             return categories[i]
     return 'Unknown'
-# counts and displays how many pollutants belong to every air pollution category
+
+# wykres liczności kategorii (ile razy składniki powietrza znalazły się w danej kategorii)
 def count_and_display_air_quality_categories(lat, lon):
 
     values = load_pollution_gps_code(lat, lon)
@@ -322,30 +325,30 @@ def count_and_display_air_quality_categories(lat, lon):
 
     categories = list(categories_count.keys())
     values = list(categories_count.values())
-    colors = ['green', 'yellow', 'orange', 'red', 'purple']  # Kolory dla poszczególnych kategorii
+    colors = ['green', 'yellow', 'orange', 'red', 'purple']
 
-    # Tworzenie wykresu słupkowego
+
     fig, ax = plt.subplots(figsize=(10, 6))
     bars = ax.bar(categories, values, color=colors, edgecolor='black')
 
-    # Dodanie tytułu i etykiet
+
     ax.set_title('Categories Count', fontsize=16)
     ax.set_xlabel('Category', fontsize=14)
     ax.set_ylabel('Count', fontsize=14)
 
-    # Ustawienie osi Y na liczby całkowite
-    ax.set_yticks(np.arange(0, max(values) + 1, 1))  # Skala osi Y tylko na liczby całkowite
 
-    # Obrócenie etykiet na osi X dla lepszej czytelności
+    ax.set_yticks(np.arange(0, max(values) + 1, 1))
+
+
     ax.set_xticklabels(categories, rotation=15, fontweight="bold")
 
-    # Wyświetlenie siatki dla osi Y
+
     ax.grid(axis='y', linestyle='--', alpha=0.7)
 
     plt.tight_layout()
-    return fig  # Zwracamy fig, żeby można było osadzić go w nowym oknie
+    return fig
 
-# a helping function to display charts for pollutants levels and their air quality category
+# funkcja pomocnicza do wyświetlania wartości składnika powietrza wraz z przypisaniem wartości do odpowiedniej kategorii zanieczyszczenia
 def display_air_pollution_element_with_category_placement(value, limits, title, x_axis_limit):
     categories = ['Good', 'Fair', 'Moderate', 'Poor', 'Very Poor']
     if value > limits[5]:
@@ -378,7 +381,7 @@ def display_air_pollution_element_with_category_placement(value, limits, title, 
     ax.legend()
     return fig
 
-# displaying a chart of SO2-level and the air quality category
+# wykres wartości so2 i kategorii
 def display_so2_placement(lat, lon):
     value = load_pollution_gps_code(lat, lon)[0]
 
@@ -387,7 +390,7 @@ def display_so2_placement(lat, lon):
     fig = display_air_pollution_element_with_category_placement(value, limits, "Category of sulphur dioxide (SO₂) based on value", limits[5])
     return fig
 
-# displaying a chart of NO2-level and the air quality category
+# wykres wartości no2 i kategorii
 def display_no2_placement(lat, lon):
     value = load_pollution_gps_code(lat, lon)[1]
 
@@ -396,7 +399,7 @@ def display_no2_placement(lat, lon):
     fig = display_air_pollution_element_with_category_placement(value, limits, "Category of nitrogen dioxide (NO₂) based on value", limits[5])
     return fig
 
-# displaying a chart of PM10-level and the air quality category
+# wykres wartości pm10 i kategorii
 def display_pm10_placement(lat, lon):
     value = load_pollution_gps_code(lat, lon)[2]
 
@@ -405,7 +408,7 @@ def display_pm10_placement(lat, lon):
     fig = display_air_pollution_element_with_category_placement(value, limits, "Category of particulates (PM10) based on value", limits[5])
     return fig
 
-# displaying a chart of PM2.5-level and the air quality category
+# wykres wartości pm25 i kategorii
 def display_pm25_placement(lat, lon):
     value = load_pollution_gps_code(lat, lon)[3]
 
@@ -414,7 +417,7 @@ def display_pm25_placement(lat, lon):
     fig = display_air_pollution_element_with_category_placement(value, limits, "Category of particulates (PM2.5) based on value", limits[5])
     return fig
 
-# displaying a chart of O3-level and the air quality category
+# wykres wartości o3 i kategorii
 def display_o3_placement(lat, lon):
     value = load_pollution_gps_code(lat, lon)[4]
 
@@ -423,7 +426,7 @@ def display_o3_placement(lat, lon):
     fig = display_air_pollution_element_with_category_placement(value, limits, "Category of ozone (O₃) based on value", limits[5])
     return fig
 
-# displaying a chart of CO-level and the air quality category
+# wykres wartości co i kategorii
 def display_co_placement(lat, lon):
     value = load_pollution_gps_code(lat, lon)[5]
 
@@ -432,23 +435,24 @@ def display_co_placement(lat, lon):
     fig = display_air_pollution_element_with_category_placement(value, limits, "Category of carbon monoxide (CO) based on value", limits[5])
     return fig
 
+# wykres porównania wartości zanieczysczeń dla dwóch miast
 def display_comparison_chart(lat_c1, lon_c1, lat_c2, lon_c2, city1, city2):
-    # Dane zanieczyszczeń powietrza dla dwóch miast (tabele)
+
     data_city1 = load_pollution_gps_code(lat_c1, lon_c1)[0:6]
     data_city2 = load_pollution_gps_code(lat_c2, lon_c2)[0:6]
 
-    # Kategorie zanieczyszczeń
+
     categories = ['SO2', 'NO2', 'PM10', 'PM2.5', 'O3', 'CO']
 
-    x = np.arange(len(categories))  # Lokalizacje dla grupy kategorii
-    width = 0.35  # Szerokość słupków
+    x = np.arange(len(categories))
+    width = 0.35
 
-    # Tworzenie wykresu
+
     fig, ax = plt.subplots(figsize=(10, 6))
     bars1 = ax.bar(x - width / 2, data_city1, width, label=city1, color='skyblue')
     bars2 = ax.bar(x + width / 2, data_city2, width, label=city2, color='orange')
 
-    # Dostosowanie wykresu
+
     ax.set_xlabel('Pollutants')
     ax.set_ylabel('Pollution level')
     ax.set_title('Pollution comparison chart')
@@ -456,10 +460,10 @@ def display_comparison_chart(lat_c1, lon_c1, lat_c2, lon_c2, city1, city2):
     ax.set_xticklabels(categories)
     ax.legend()
 
-    # Usunięcie kratki
+
     ax.grid(False)
 
-    # Dodanie wartości na szczycie słupków
+
     for bar in bars1 + bars2:
         height = bar.get_height()
         ax.text(bar.get_x() + bar.get_width() / 2, height + 1, f'{height}', ha='center', va='bottom')
@@ -467,11 +471,12 @@ def display_comparison_chart(lat_c1, lon_c1, lat_c2, lon_c2, city1, city2):
     plt.tight_layout()
     return fig
 
+#funkcja pomocznicza to wyświetlania wykresu zmian wartości składników powietrza w czasie
 def display_pollutants_development_chart(lat, lon, data, max_ticks=10):
-    # Wyciąganie wartości czasu i konwersja do formatu czytelnego
+
     timestamps = [datetime.fromtimestamp(item["timestamp"], tz=timezone.utc) for item in data]
 
-    # Wyciąganie wartości dla każdego składnika powietrza
+
     so2 = [item["so2"] for item in data]
     no2 = [item["no2"] for item in data]
     pm10 = [item["pm10"] for item in data]
@@ -479,7 +484,7 @@ def display_pollutants_development_chart(lat, lon, data, max_ticks=10):
     o3 = [item["o3"] for item in data]
     co = [item["co"] for item in data]
 
-    # Tworzenie jednej figury z dwoma osiami (jednym wykresem na każdej osi)
+
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
 
     # Wykres 1: Wszystkie składniki oprócz CO
@@ -494,14 +499,14 @@ def display_pollutants_development_chart(lat, lon, data, max_ticks=10):
     ax1.set_ylabel('Concentration', fontsize=12)
     ax1.grid(True, linestyle='--', alpha=0.6)
 
-    # Ustawienie etykiet na osi X: tylko co n-ty punkt
+
     if len(timestamps) > max_ticks:
         step = len(timestamps) // max_ticks
     else:
         step = 1
     xticks = [timestamps[i] for i in range(0, len(timestamps), step)]
 
-    # Ustawianie etykiet na osi X
+
     ax1.set_xticks(xticks)
     ax1.set_xticklabels([ts.strftime('%Y-%m-%d %H:%M') for ts in xticks], rotation=45, ha="right", fontsize=6.5)
 
@@ -514,16 +519,16 @@ def display_pollutants_development_chart(lat, lon, data, max_ticks=10):
     ax2.set_ylabel('Concentration (CO)', fontsize=12)
     ax2.grid(True, linestyle='--', alpha=0.6)
 
-    # Ustawienie etykiet na osi X: tylko co n-ty punkt
+
     ax2.set_xticks(xticks)
     ax2.set_xticklabels([ts.strftime('%Y-%m-%d %H:%M') for ts in xticks], rotation=45, ha="right")
 
     ax2.legend(loc='upper left', fontsize=10)
 
-    # Zwracanie jednej figury, która zawiera oba wykresy
+
     return fig
 
-
+# wykres zmian wartości składników powietrza w ciągu ostatnich 24 godzin
 def display_pollutants_development_chart_24h(lat, lon):
     now = datetime.now(timezone.utc)
     rounded_time = now.replace(minute=0, second=0, microsecond=0)
@@ -534,6 +539,7 @@ def display_pollutants_development_chart_24h(lat, lon):
 
     return fig
 
+#wykres zmian wartości składników powietrza w ciągu ostatnich 168h
 def display_pollutants_development_chart_7days(lat, lon):
     now = datetime.now(timezone.utc)
     rounded_time = now.replace(minute=0, second=0, microsecond=0)
@@ -543,7 +549,7 @@ def display_pollutants_development_chart_7days(lat, lon):
 
     return fig
 
-# Toggling the input fields
+# wybieranie trybu wyszkuiwania (1 zakładka - GPS/nazwa miasta)
 def toggle_search_mode():
     if search_mode.get() == 'coordinates':
         latitude_entry.config(state='normal')
@@ -554,7 +560,7 @@ def toggle_search_mode():
         longitude_entry.config(state='disabled')
         city_entry.config(state='normal')
 
-# Toggling the input fields
+# wybieranie trybu wyszukiwania (3 zakładka - porównywanie - GPS/nazwa miasta)
 def toggle_compare_mode():
     if compare_mode.get() == 'city':
         for widget in [entry1, entry2]:
@@ -567,6 +573,7 @@ def toggle_compare_mode():
         for widget in [entry_gps1_lat, entry_gps1_long, entry_gps2_lat, entry_gps2_long]:
             widget.config(state='normal')
 
+# wybieranie trybu wyszukiwania (2 zakładka - dane historyczne - GPS/nazwa miasta)
 def toggle_historical_mode():
     if historical_chosen_mode.get() == 'city':
         entry1_t2.config(state='normal')
@@ -577,6 +584,7 @@ def toggle_historical_mode():
         for widget in [entry_gps1_lat_t2, entry_gps1_long_t2]:
             widget.config(state='normal')
 
+# wybieranie trybu wyszukiwania (4 zakładka - regresja - GPS/nazwa miasta)
 def toggle_forecast_mode():
     if forecast_chosen_mode.get() == 'city':
         entry1_forecast.config(state='normal')
@@ -587,10 +595,10 @@ def toggle_forecast_mode():
         for widget in [entry_gps1_lat_forecast, entry_gps1_long_forecast]:
             widget.config(state='normal')
 
-# displaying the basic pollution data
+# wyświetlenie ogólnych danych zanieczyszczenia (1 zakładka)
 def display_data():
 
-    # Sprawdzenie trybu wyszukiwania
+
     try:
         if search_mode.get() == 'coordinates':
             lat = latitude_entry.get()
@@ -663,6 +671,7 @@ def display_data():
     except Exception as e:
         data_display.config(text="Cannot display data for this input. Change the data and try again!")
 
+# zwrócenie danych zależnie od wybranej metody wyszukiwania (zakładka 1)
 def adjust_search_mode_return_tab1():
     return_table = []
     if search_mode.get() == 'city':
@@ -686,6 +695,7 @@ def adjust_search_mode_return_tab1():
         return_table.append(country)
     return return_table
 
+# zwrócenie danych zależnie od wybranej metody wyszukiwania (zakładka 3)
 def adjust_comparison_mode_return_tab3():
     return_table = []
     if compare_mode.get() == 'city':
@@ -726,6 +736,7 @@ def adjust_comparison_mode_return_tab3():
         return_table.append(country2)
     return return_table
 
+# zwrócenie danych zależnie od wybranej metody wyszukiwania (zakładka 2)
 def adjust_historical_data_mode():
     return_table = []
     if historical_chosen_mode.get() == 'city':
@@ -748,41 +759,42 @@ def adjust_historical_data_mode():
         return_table.append(country)
     return return_table
 
-#displaying a new window with trehhold chart
+# wyświetlenie wykresu w nowym oknie z wartościami granicznymi kategorii
 def show_thresholds_window():
-    # Tworzymy nowe okno do wyświetlenia wykresu
+
     thresholds_window = tk.Toplevel(root)
     thresholds_window.title("Thresholds Chart")
     thresholds_window.geometry('1100x950')
 
-    # Wywołaj funkcję do rysowania wykresu w tym nowym oknie
+
     fig = display_treshhold_values()
 
-    # Osadzamy wykres w oknie tkinter
+
     canvas = FigureCanvasTkAgg(fig, master=thresholds_window)
     canvas.draw()
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-#displaying a new window with category count chart
+# wyświetlenie wykresu w nowym oknie ze zliczeniem kategorii
 def show_category_count_window():
     try:
         data = adjust_search_mode_return_tab1()
-        # Tworzymy nowe okno do wyświetlenia wykresu
+
         category_count_window = tk.Toplevel(root)
         category_count_window.title("Category Count Chart")
         category_count_window.geometry('800x600')
         lat = data[0]
         lon = data[1]
-        # Wywołaj funkcję do rysowania wykresu w tym nowym oknie
+
         fig = count_and_display_air_quality_categories(lat, lon)
 
-        # Osadzamy wykres w oknie tkinter
+
         canvas = FigureCanvasTkAgg(fig, master=category_count_window)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
     except Exception as e:
         data_display.config(text="Cannot display data for this input. Change the data and try again!")
 
+# wyświetlenie wykresu w nowym oknie ze zmianą wartości składników w ciągu ostatniej doby
 def show_pollutants_development_window_24h():
     try:
         data = adjust_historical_data_mode()
@@ -799,6 +811,7 @@ def show_pollutants_development_window_24h():
     except Exception as e:
         label_area_t2.config(text="Cannot display data for this input. Change the data and try again!")
 
+# wyświetlenie wykresu w nowym oknie ze zmianą wartości składników w ciągu ostatniego tygodnia
 def show_pollutants_development_widnow_7days():
     try:
         data = adjust_historical_data_mode()
@@ -814,8 +827,7 @@ def show_pollutants_development_widnow_7days():
     except Exception as e:
         label_area_t2.config(text="Cannot display data for this input. Change the data and try again!")
 
-
-#displaying category chart with pollutant value for selected pollutant
+# wyświetlenie wykresu w nowym oknie z wartościa oraz kategorią w zależności od wybranego składnika w rozwijanej liście
 def display_analysis():
     try:
         data = adjust_search_mode_return_tab1()
@@ -860,6 +872,7 @@ def display_analysis():
     except Exception as e:
         data_display.config(text="Cannot display data for this input. Change the data and try again!")
 
+# wyświetlenie wykresu w nowym oknie z porównaniem 2 miast
 def on_click_comparison_chart():
     try:
         data = adjust_comparison_mode_return_tab3()
@@ -882,7 +895,7 @@ def on_click_comparison_chart():
         label_area1.config(text = "Cannot display data for this input\n. Change the data and try again!")
         label_area2.config(text = "Cannot display data for this input\n. Change the data and try again!")
 
-# Function to fetch input and compare cities
+# wyświetlenie danych porównawczych w polu do wyświetlania danych
 def fetch_input_comparison():
     try:
             if compare_mode.get() == "city":
@@ -1027,6 +1040,7 @@ def fetch_input_comparison():
         label_area2.config(text="Input data is invalid\n"
                                 "or no data found for this input!")
 
+# wyświetlenie danych historycznych w polu do wyświetlania danych
 def fetch_input_historical_data():
     try:
         if historical_chosen_mode.get() == 'city':
@@ -1086,6 +1100,7 @@ def fetch_input_historical_data():
     except Exception as e:
         label_area_t2.config(text="Input data is invalid or no data found!")
 
+# wyświetlenie danych regresji w polu do wyświetlania danych
 def fetch_input_regression_data():
     try:
         if forecast_chosen_mode.get() == 'city':
@@ -1159,25 +1174,26 @@ def fetch_input_regression_data():
     except Exception as e:
         label_area_forecast.config(text="Input data is invalid or no data found!")
 
-
+# zmienienie etykiety o sposobie wyszukiwania danych (zakładka 3 - porównanie)
 def update_mode_label():
     if compare_mode.get() == 'city':
         mode_label.set('Comparing by City')
     elif compare_mode.get() == 'gps':
         mode_label.set('Comparing by GPS')
 
+# zmienienie etykiety o sposobie wyszukiwania danych (zakładka 2 - dane historyczne)
 def update_historical_mode_label():
     if historical_chosen_mode.get() == 'city':
         mode_label_t2.set('Load historical data by City')
     elif historical_chosen_mode.get() == 'gps':
         mode_label_t2.set('Load historical data by GPS')
 
+# zmienienie etykiety o sposobie wyszukiwania danych (zakładka 4 - regresja)
 def update_forecast_mode_label():
     if forecast_chosen_mode.get() == 'city':
         mode_label_forecast.set('Load regression data by City')
     elif forecast_chosen_mode.get() == 'gps':
         mode_label_forecast.set('Load regression data by GPS')
-
 
 
 
@@ -1190,22 +1206,22 @@ root.geometry('555x790')
 tab_control = ttk.Notebook(root)
 tab_control.pack(expand=1, fill='both')
 
-# Zakładka 1
+# Zakładka 1 --------------------------------------------------------------------------------------------
 tab1 = ttk.Frame(tab_control)
 tab_control.add(tab1, text='GPS- and name-based search')
 
-# Górna sekcja z opcjami
+
 options_frame = ttk.Frame(tab1)
 options_frame.pack(fill='x', padx=10, pady=10)
 
-# Kontenery dla opcji
+
 left_frame = ttk.Frame(options_frame)
 left_frame.pack(side='left', expand=True, fill='both', padx=10, pady=10)
 
 right_frame = ttk.Frame(options_frame)
 right_frame.pack(side='right', expand=True, fill='both', padx=10, pady=10)
 
-# Wybór metody wyszukiwania (lewa strona)
+# Wybór metody wyszukiwania
 search_mode = tk.StringVar(value='coordinates')
 
 coordinates_radio = ttk.Radiobutton(left_frame, text='Search by Coordinates', variable=search_mode, value='coordinates',
@@ -1222,7 +1238,7 @@ longitude_label.pack(anchor='w')
 longitude_entry = ttk.Entry(left_frame)
 longitude_entry.pack(anchor='w', fill='x', pady=2)
 
-# Wybór metody wyszukiwania (prawa strona)
+# Wybór metody wyszukiwania
 city_radio = ttk.Radiobutton(right_frame, text='Search by City Name', variable=search_mode, value='city',
                              command=toggle_search_mode)
 city_radio.pack(anchor='w', pady=5)
@@ -1232,7 +1248,6 @@ city_label.pack(anchor='w')
 city_entry = ttk.Entry(right_frame)
 city_entry.pack(anchor='w', fill='x', pady=2)
 
-# Ustawienie domyślnego stanu pól
 toggle_search_mode()
 
 
@@ -1271,14 +1286,14 @@ analysis_button = ttk.Button(tab1, text="Display Analysis", command=display_anal
 
 
 
-
+# zakładka 2 --------------------------------------------------------------------------------------------------
 
 tab2 = ttk.Frame(tab_control)
 tab_control.add(tab2, text='Historical Data')
 tab2.columnconfigure(0, weight=1)
 tab2.columnconfigure(1, weight=1)
 
-# Selection Mode with Radio Buttons
+# wybór metody wyszukiwania
 historical_chosen_mode = tk.StringVar(value='city')
 mode_label_t2 = tk.StringVar(value='Loading historical data by City')
 
@@ -1291,7 +1306,7 @@ radio_gps_t2.grid(row=1, column=0, columnspan=2, pady=5)
 mode_display_label_t2 = ttk.Label(tab2, textvariable=mode_label_t2, font=('Arial', 12, 'bold'))
 mode_display_label_t2.grid(row=2, column=0, columnspan=2, pady=5)
 
-# --- Column 1: City 1 ---
+# --- Kolumna 1: Miasto 1 ---
 label1_t2 = tk.Label(tab2, text="Enter city name:")
 label1_t2.grid(row=3, column=0, padx=10, pady=5, sticky="w")
 entry1_t2 = tk.Entry(tab2)
@@ -1307,34 +1322,32 @@ label_gps1_long_t2.grid(row=7, column=0, padx=10, pady=2, sticky="w")
 entry_gps1_long_t2 = tk.Entry(tab2)
 entry_gps1_long_t2.grid(row=8, column=0, columnspan=2, padx=10, pady=2, sticky="ew")
 
-# --- Data Display Areas ---
+# wyświetlanie danych
 label_area_t2 = tk.Label(tab2, text="data....", height=20, width=70, relief="solid", anchor="nw", justify="left", background='white', font=('Arial', 11))
 label_area_t2.grid(row=9, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
 
 fetch_input_button = ttk.Button(tab2, text='Fetch Input', command=fetch_input_historical_data, width=30)
 fetch_input_button.grid(row=10, column=0, columnspan=2, pady=10)
 
-# --- Last Week and Last 24h Buttons (initially hidden) ---
+# przycisk ostatnie 24h wstępnie schowany-
 last_7_days_button = ttk.Button(tab2, text='Last Week', command = show_pollutants_development_widnow_7days, width=30, padding=10)
 last_24_hours_button = ttk.Button(tab2, text='Last 24h', command=show_pollutants_development_window_24h, width=30, padding=10)
 
 toggle_historical_mode()
 
 
-
+# zakładka 3 ------------------------------------------------------------------------------------------------------------
 
 tab3 = ttk.Frame(tab_control)
 tab_control.add(tab3, text='Pollution Compare')
 
-# Grid Configuration
+
 tab3.columnconfigure(0, weight=1)
 tab3.columnconfigure(1, weight=1)
 
-# Selection Mode with Radio Buttons
+# wybór metody wyszukiwania
 compare_mode = tk.StringVar(value='city')
 mode_label = tk.StringVar(value='Comparing by City')
-
-
 
 
 radio_city = ttk.Radiobutton(tab3, text='Compare by City', variable=compare_mode, value='city', command=lambda: [toggle_compare_mode(), update_mode_label()])
@@ -1346,7 +1359,7 @@ radio_gps.grid(row=1, column=0, columnspan=2, pady=5)
 mode_display_label = ttk.Label(tab3, textvariable=mode_label, font=('Arial', 12, 'bold'))
 mode_display_label.grid(row=2, column=0, columnspan=2, pady=5)
 
-# --- Column 1: City 1 ---
+# --- Kolumna1: Miasto 1 ---
 label1 = tk.Label(tab3, text="Enter City 1:")
 label1.grid(row=3, column=0, padx=10, pady=5, sticky="w")
 entry1 = tk.Entry(tab3)
@@ -1362,7 +1375,7 @@ label_gps1_long.grid(row=7, column=0, padx=10, pady=2, sticky="w")
 entry_gps1_long = tk.Entry(tab3)
 entry_gps1_long.grid(row=8, column=0, padx=10, pady=2, sticky="ew")
 
-# --- Column 2: City 2 ---
+# --- Kolumna 2: Miasto 2 ---
 label2 = tk.Label(tab3, text="Enter City 2:")
 label2.grid(row=3, column=1, padx=10, pady=5, sticky="w")
 entry2 = tk.Entry(tab3)
@@ -1378,29 +1391,31 @@ label_gps2_long.grid(row=7, column=1, padx=10, pady=2, sticky="w")
 entry_gps2_long = tk.Entry(tab3)
 entry_gps2_long.grid(row=8, column=1, padx=10, pady=2, sticky="ew")
 
-# --- Data Display Areas ---
+# Wyświetlanie danych
 label_area1 = tk.Label(tab3, text="City 1 data....", height=20, width=70, relief="solid", anchor="nw", justify="left", background='white', font=('Arial', 11))
 label_area1.grid(row=9, column=0, padx=10, pady=10, sticky="nsew")
 
 label_area2 = tk.Label(tab3, text="City 2 data....", height=20, width=70, relief="solid", anchor="nw", justify="left", background='white', font=('Arial', 11))
 label_area2.grid(row=9, column=1, padx=10, pady=10, sticky="nsew")
 
-# Compare Button
+# Przycisk porównania
 compare_button = ttk.Button(tab3, text='Compare', command=fetch_input_comparison, width=20)
 compare_button.grid(row=10, column=0, columnspan=2, pady=20)
 
 show_chart_button = ttk.Button(tab3, text='Show Chart', command=on_click_comparison_chart, width=20)
 show_chart_button.grid(row=11, column=0, columnspan=2, pady=7)
-show_chart_button.grid_remove()  # Initially hidden
+show_chart_button.grid_remove()
 
 toggle_compare_mode()
 
+
+# zakładka 4 ------------------------------------------------------------------------------------------------------------------------
 tab4 = ttk.Frame(tab_control)
 tab_control.add(tab4, text='Pollution forecast')
 tab4.columnconfigure(0, weight=1)
 tab4.columnconfigure(1, weight=1)
 
-# Selection Mode with Radio Buttons
+# wybór metody wyszukiwania
 forecast_chosen_mode = tk.StringVar(value='city')
 mode_label_forecast = tk.StringVar(value='Load regression data by City')
 
@@ -1413,7 +1428,7 @@ radio_gps_forecast.grid(row=1, column=0, columnspan=2, pady=5)
 mode_display_label_forecast = ttk.Label(tab4, textvariable=mode_label_forecast, font=('Arial', 12, 'bold'))
 mode_display_label_forecast.grid(row=2, column=0, columnspan=2, pady=5)
 
-# --- Column 1: City 1 ---
+# --- Kolumna1: Miasto 1 ---
 label1_forecast= tk.Label(tab4, text="Enter city name:")
 label1_forecast.grid(row=3, column=0, padx=10, pady=5, sticky="w")
 entry1_forecast = tk.Entry(tab4)
@@ -1429,7 +1444,7 @@ label_gps1_long_forecast.grid(row=7, column=0, padx=10, pady=2, sticky="w")
 entry_gps1_long_forecast= tk.Entry(tab4)
 entry_gps1_long_forecast.grid(row=8, column=0, columnspan=2, padx=10, pady=2, sticky="ew")
 
-# --- Data Display Areas ---
+# --- Wyświetlanie danych
 label_area_forecast= tk.Label(tab4, text="data....", height=20, width=70, relief="solid", anchor="nw", justify="left", background='white', font=('Arial', 11))
 label_area_forecast.grid(row=9, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
 
@@ -1441,19 +1456,19 @@ toggle_forecast_mode()
 
 
 
-# Zakładka 5 (credits)
+# Zakładka 5 ---------------------------------------------------------------------------------------------------------------------
 tab5 = ttk.Frame(tab_control)
 tab_control.add(tab5, text='Project credits')
 
-# Główna ramka na zawartość
+
 credits_frame = ttk.Frame(tab5, padding=20)
 credits_frame.pack(expand=1, fill='both')
 
-# Tytuł projektu
+
 title_label = ttk.Label(credits_frame, text="Project Credits", font=('Arial', 18, 'bold'))
 title_label.pack(pady=(10, 20))
 
-# Lista informacji o projekcie
+
 credits_text = [
     "Project authors: Krzysztof Drobnik, Maksymilian Jurewicz",
     "Project name: Calculating air quality based on few basic pollutants\nusing Open Weather API and basic GUI",
@@ -1464,32 +1479,32 @@ credits_text = [
     "Study year: 1"
 ]
 
-# Wyświetlanie informacji w pętli
+
 for text in credits_text:
     label = ttk.Label(credits_frame, text=text, font=('Arial', 12), anchor='w', justify='left')
     label.pack(anchor='w', pady=5)
 
-# Separator na końcu
+
 separator = ttk.Separator(credits_frame, orient='horizontal')
 separator.pack(fill='x', pady=(20, 10))
 
-# Wczytywanie i wyświetlanie obrazków
+
 def load_and_display_image(frame, path):
     try:
         image = Image.open(path)
-        image = image.resize((200, 150), Image.Resampling.LANCZOS)  # Zmiana metody resamplingu
+        image = image.resize((200, 150), Image.Resampling.LANCZOS)
         photo = ImageTk.PhotoImage(image)
         label = ttk.Label(frame, image=photo)
-        label.image = photo  # Zapisywanie referencji, aby nie zostało usunięte przez garbage collector
+        label.image = photo
         label.pack(pady=10)
     except Exception as e:
         error_label = ttk.Label(frame, text=f"Error loading image: {path}", font=('Arial', 10), foreground='red')
         error_label.pack(pady=5)
 
-# Wyświetlenie pierwszego obrazka
+
 load_and_display_image(credits_frame, 'jpg1.jpg')
 
-# Wyświetlenie drugiego obrazka
+
 load_and_display_image(credits_frame, 'jpg2.jpg')
 
 root.mainloop()

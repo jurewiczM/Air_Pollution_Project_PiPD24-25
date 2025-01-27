@@ -1,3 +1,4 @@
+# słownik z kodami krajów i pełną nazwą kraju
 country_domain_codes = {
     "AF": "Afghanistan",
     "AX": "Åland Islands",
@@ -203,5 +204,6 @@ country_domain_codes = {
     "SX": "Sint Maarten (Dutch part)",
     "SK": "Slovakia",
     "SI": "Slovenia",
-    "SB": "Sol"
+    "SB": "Sol",
+    "GB": "Great Britain"
 }

@@ -4,14 +4,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
 import xgboost as xgb
-import numpy as np
 from datetime import datetime, timedelta, timezone
-import matplotlib.pyplot as plt
+
 
 def get_air_quality_prediction(location):
     api_key = '986b86d5d24bbace34084b1fcda169bd'
-    # Zmiana daty na sposób kompatybilny z przyszłymi wersjami Pythona
-    end_date = datetime.now(timezone.utc)  # Zamiast utcnow(), używamy datetime.now() z timezone.utc
+
+    end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(days=7)
     historical_data = []
 
@@ -22,7 +21,7 @@ def get_air_quality_prediction(location):
         response = requests.get(url)
         data = response.json()
 
-        # Error handling
+
         if response.status_code != 200 or 'list' not in data:
             print(f"Error fetching data for date: {date}. Status code: {response.status_code}")
             continue
@@ -56,7 +55,7 @@ def get_air_quality_prediction(location):
     single_instance = X_test[0].reshape(1, -1)
     predicted_aqi = xgboost_model.predict(single_instance)
 
-    # Tworzymy słownik z wynikami
+
     results = {
         "predicted_aqi": predicted_aqi[0],
         "r2_score": r2,
@@ -64,13 +63,13 @@ def get_air_quality_prediction(location):
         "mean_absolute_error": mae
     }
 
-    # Zwracanie słownika z wynikami
+
     return results
 
 # API klucz i lokalizacja
 
 location = {'lat': 40.7128, 'lon': -74.0060}
 
-# Wywołanie funkcji i wypisanie wyników
+
 results = get_air_quality_prediction(location)
 #print(results)
