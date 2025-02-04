@@ -109,7 +109,7 @@ def load_pollution_gps_code(lat, lon):
 
 # konwersja koordynatów GPS do miasta (i innych danych)
 def convert_gps_to_city(lat, lon):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API'
 
     geocoding_api_url = f'http://api.openweathermap.org/geo/1.0/reverse?lat={lat}&lon={lon}&limit={5}&appid={key}'
     response = requests.get(geocoding_api_url)
@@ -137,7 +137,7 @@ def convert_gps_to_city(lat, lon):
 
 # kowersja nazwy miasta to koordynatów geograficznych (i innych danych)
 def convert_city_to_gps(city_name):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API'
     direct_geocoding_api_url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit={1}&appid={key}"
 
     response = requests.get(direct_geocoding_api_url)
@@ -166,7 +166,7 @@ def convert_city_to_gps(city_name):
 
 # pobieranie AQI (Air Quality Index)
 def get_air_quality_index(lat, lon):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API'
 
     air_pollution_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&appid={key}'
     response = requests.get(air_pollution_api_url)
