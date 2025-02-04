@@ -4,7 +4,7 @@ from CountriesDictionary import country_domain_codes as cdc
 
 # wczytywanie danych o zanieczyszczeniu powietrza z ostatniego tygodnia z godzinnym odstępem (7 dni x 24h = 168h)
 def load_historical_data_1WeekBefore(lat, lon, start):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API'
     historical_data = []
 
 
@@ -40,7 +40,7 @@ def load_historical_data_1WeekBefore(lat, lon, start):
 
 # wczytywanie danych o zanieczysczeniu powietrza z ostatniej doby
 def load_historical_data_24hwindow(lat, lon, end):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API'
     historical_data = []
 
     day_end = end
@@ -72,7 +72,7 @@ def load_historical_data_24hwindow(lat, lon, end):
 
 # wczytywanie obecnych danych o zanieczysczeniu powietrza (na podstawie koordynatów GPS)
 def load_pollution_gps_code(lat, lon):
-    key = '986b86d5d24bbace34084b1fcda169bd'
+    key = 'API'
 
     air_pollution_api_url = f'http://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&appid={key}'
     response = requests.get(air_pollution_api_url)
