@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 
 def get_air_quality_prediction(location):
-    api_key = '986b86d5d24bbace34084b1fcda169bd'
+    api_key = 'API'
 
     end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(days=7)
